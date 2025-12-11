@@ -133,12 +133,22 @@ export default function Products() {
                   <span className="text-sm text-muted-foreground">4.8</span>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <span className="text-xl font-bold text-primary">Rs {product.price}</span>
+                </div>
 
+                <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    className="bg-primary text-primary-foreground"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => navigate(`/product/${product.id}`)}
+                  >
+                    Details
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-primary text-primary-foreground"
                     onClick={() => handleAddToCart(product)}
                   >
                     <ShoppingCart className="w-4 h-4 mr-1" />
