@@ -1,238 +1,454 @@
-import { useState } from 'react';
-import { MainLayout } from '@/components/layout/MainLayout';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useCart } from '@/contexts/CartContext';
-import { User, Tag } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import OrderSummary from "@/pages/OrderSummary";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { User } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useCart } from "@/contexts/CartContext";
 
-export default function Checkout() {
-  const { items, getSubtotal, clearCart } = useCart();
+// Country List
+const countries = ["Pakistan", "India", "Bangladesh", "Sri Lanka", "Nepal"];
+
+// Cities mapped by country
+const countryCities: Record<string, string[]> = {
+  Pakistan: [
+    "Karachi",
+    "Lahore",
+    "Islamabad",
+    "Rawalpindi",
+    "Faisalabad",
+    "Multan",
+    "Peshawar",
+    "Quetta",
+    "Sialkot",
+    "Gujranwala",
+  ],
+  India: ["Delhi", "Mumbai", "Bangalore", "Chennai", "Kolkata"],
+  Bangladesh: ["Dhaka", "Chittagong", "Khulna", "Rajshahi"],
+  "Sri Lanka": ["Colombo", "Kandy", "Galle"],
+  Nepal: ["Kathmandu", "Pokhara", "Lalitpur"],
+};
+
+const Checkout = () => {
   const navigate = useNavigate();
-  const [discountCode, setDiscountCode] = useState('');
-  const [discount, setDiscount] = useState(0);
-  
-  const subtotal = getSubtotal();
-  const shippingFee = 250;
-  const total = subtotal + shippingFee - discount;
+  const { toast } = useToast();
+  const { items, clearCart } = useCart();
 
-  const handleApplyDiscount = () => {
-    if (discountCode.toUpperCase() === 'SAVE10') {
-      const discountAmount = subtotal * 0.1;
-      setDiscount(discountAmount);
+  const [email, setEmail] = useState("");
+  const [emailOffers, setEmailOffers] = useState(false);
+  const [selectedCity, setSelectedCity] = useState("");
+  const [country, setCountry] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [address, setAddress] = useState("");
+  const [cityInput, setCityInput] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [phone, setPhone] = useState("");
+  const [saveInfo, setSaveInfo] = useState(false);
+  const [shippingMethod, setShippingMethod] = useState("cod");
+  const [billingAddress, setBillingAddress] = useState("same");
+
+  // Convert cart items to the format expected by OrderSummary
+  const cartItems = items.map((item) => ({
+    id: item.id,
+    quantity: item.quantity,
+    product: {
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      discount: 0,
+      image_url: item.image || "/placeholder.svg",
+    },
+  }));
+
+  const handleCompleteOrder = async () => {
+    if (
+      !email ||
+      !firstName ||
+      !lastName ||
+      !address ||
+      !phone ||
+      !selectedCity ||
+      !country
+    ) {
       toast({
-        title: 'Discount Applied',
-        description: '10% discount has been applied to your order.',
+        title: "Missing Information",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
       });
-    } else {
+      return;
+    }
+
+    if (items.length === 0) {
       toast({
-        title: 'Invalid Code',
-        description: 'The discount code you entered is not valid.',
-        variant: 'destructive',
+        title: "Cart Empty",
+        description: "Please add items to your cart before placing an order.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+      const orderData = {
+        user_id: user.user_id || null,
+        email,
+        email_offers: emailOffers,
+        first_name: firstName,
+        last_name: lastName,
+        address,
+        city: selectedCity,
+        country,
+        postal_code: postalCode,
+        phone,
+        save_info: saveInfo,
+        shipping_method: shippingMethod,
+        billing_address: billingAddress,
+        cart_items: cartItems,
+        total_amount:
+          cartItems.reduce((a, c) => a + c.product.price * c.quantity, 0) +
+          (shippingMethod === "cod" ? 250 : 0),
+        shipping_cost: shippingMethod === "cod" ? 250 : 0,
+      };
+
+      const response = await fetch("http://127.0.0.1:8000/orders/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast({
+          title: "Error",
+          description: data.detail || "Something went wrong.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Success", description: "Order placed successfully." });
+        clearCart();
+        navigate("/");
+      }
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: "Network Error",
+        description: "Could not connect to server.",
+        variant: "destructive",
       });
     }
   };
 
-  const handlePlaceOrder = () => {
-    toast({
-      title: 'Order Placed Successfully!',
-      description: 'Thank you for your purchase. Your order is being processed.',
-    });
-    clearCart();
-    navigate('/products');
-  };
-
-  if (items.length === 0) {
-    navigate('/cart');
-    return null;
-  }
-
   return (
-    <MainLayout>
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-            <User className="w-5 h-5 text-primary" />
-          </div>
-          <h1 className="font-heading text-3xl font-bold text-foreground">Checkout</h1>
+    <div className="min-h-screen bg-[hsl(30,25%,85%)]">
+      {/* Header - Fixed at top */}
+      <header className="fixed top-0 left-0 right-0 bg-primary py-4 px-8 z-50">
+        <div className="flex justify-start">
+          <span className="text-primary-foreground text-xl font-semibold">
+            AccentsHub
+          </span>
         </div>
+      </header>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Customer Information */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="rounded-xl bg-card border border-border p-6">
-              <h2 className="font-heading text-xl font-bold text-foreground mb-6">Contact Information</h2>
+      {/* Main content */}
+      <div className="flex flex-col lg:flex-row pt-16">
+        {/* Left Column - Form */}
+        <div className="flex-1 min-h-screen overflow-y-auto lg:pr-[400px] px-6">
+          <div className="max-w-xl ml-16 py-8">
+            {/* Login Icon */}
+            <div className="flex justify-end mb-6">
+              <button
+                onClick={() => navigate("/login")}
+                className="flex items-center gap-2 text-foreground hover:text-secondary transition-colors"
+              >
+                <User className="h-6 w-6" />
+                <span className="text-sm">Login</span>
+              </button>
+            </div>
+
+            {/* Contact Section */}
+            <section className="mb-8">
+              <h2 className="text-xl font-semibold text-foreground mb-4">
+                Contact
+              </h2>
               <div className="space-y-4">
-                <div>
-                  <Label htmlFor="email" className="text-foreground">Email Address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="your@email.com"
-                    className="mt-1 bg-secondary border-border"
+                <Input
+                  type="email"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-white"
+                />
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="emailOffers"
+                    checked={emailOffers}
+                    onCheckedChange={(checked) =>
+                      setEmailOffers(checked as boolean)
+                    }
                   />
-                </div>
-                <div>
-                  <Label htmlFor="phone" className="text-foreground">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="+1 (555) 000-0000"
-                    className="mt-1 bg-secondary border-border"
-                  />
+                  <Label
+                    htmlFor="emailOffers"
+                    className="text-sm text-muted-foreground"
+                  >
+                    Email me with news and offers
+                  </Label>
                 </div>
               </div>
-            </div>
+            </section>
 
-            <div className="rounded-xl bg-card border border-border p-6">
-              <h2 className="font-heading text-xl font-bold text-foreground mb-6">Shipping Address</h2>
-              <div className="grid gap-4">
-                <div className="grid sm:grid-cols-2 gap-4">
+            {/* Delivery Section */}
+            <section className="mb-8">
+              <h2 className="text-xl font-semibold text-foreground mb-4">
+                Delivery
+              </h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Country Dropdown */}
                   <div>
-                    <Label htmlFor="firstName" className="text-foreground">First Name</Label>
-                    <Input
-                      id="firstName"
-                      placeholder="John"
-                      className="mt-1 bg-secondary border-border"
-                    />
+                    <Label className="text-sm text-muted-foreground mb-2 block">
+                      Country/Region
+                    </Label>
+                    <Select
+                      value={country}
+                      onValueChange={(val) => {
+                        setCountry(val);
+                        setSelectedCity("");
+                      }}
+                    >
+                      <SelectTrigger className="w-full bg-white">
+                        <SelectValue placeholder="Country/Region" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border border-border z-50">
+                        {countries.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+
+                  {/* City Dropdown */}
                   <div>
-                    <Label htmlFor="lastName" className="text-foreground">Last Name</Label>
-                    <Input
-                      id="lastName"
-                      placeholder="Doe"
-                      className="mt-1 bg-secondary border-border"
-                    />
+                    <Label className="text-sm text-muted-foreground mb-2 block">
+                      Select City
+                    </Label>
+                    <Select
+                      value={selectedCity}
+                      onValueChange={setSelectedCity}
+                      disabled={!country}
+                    >
+                      <SelectTrigger className="w-full bg-white">
+                        <SelectValue placeholder="Select City" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border border-border z-50">
+                        {(countryCities[country] || []).map((city) => (
+                          <SelectItem key={city} value={city}>
+                            {city}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                <div>
-                  <Label htmlFor="address" className="text-foreground">Street Address</Label>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
-                    id="address"
-                    placeholder="123 Main Street"
-                    className="mt-1 bg-secondary border-border"
+                    placeholder="First Name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="bg-white"
+                  />
+                  <Input
+                    placeholder="Last Name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="bg-white"
                   />
                 </div>
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="city" className="text-foreground">City</Label>
-                    <Input
-                      id="city"
-                      placeholder="New York"
-                      className="mt-1 bg-secondary border-border"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="state" className="text-foreground">State</Label>
-                    <Input
-                      id="state"
-                      placeholder="NY"
-                      className="mt-1 bg-secondary border-border"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="zip" className="text-foreground">ZIP Code</Label>
-                    <Input
-                      id="zip"
-                      placeholder="10001"
-                      className="mt-1 bg-secondary border-border"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="country" className="text-foreground">Country</Label>
-                  <Input
-                    id="country"
-                    placeholder="United States"
-                    className="mt-1 bg-secondary border-border"
-                  />
-                </div>
-              </div>
-            </div>
 
-            <Button
-              onClick={handlePlaceOrder}
-              className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
-            >
-              Place Order
-            </Button>
-          </div>
+                <Input
+                  placeholder="Address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="bg-white"
+                />
 
-          {/* Order Summary */}
-          <div className="lg:col-span-1">
-            <div className="rounded-xl bg-card border border-border p-6 sticky top-6">
-              <h2 className="font-heading text-xl font-bold text-foreground mb-6">Order Summary</h2>
-              
-              {/* Products */}
-              <div className="space-y-3 mb-6">
-                {items.map((item) => (
-                  <div key={item.id} className="flex gap-3">
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-14 h-14 object-cover rounded-lg"
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Input
+                      placeholder="City"
+                      value={cityInput}
+                      onChange={(e) => setCityInput(e.target.value)}
+                      className="bg-white"
                     />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
-                    </div>
-                    <p className="text-sm font-medium text-foreground">
-                      ${(item.price * item.quantity).toFixed(2)}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Please select city from dropdown
                     </p>
                   </div>
-                ))}
-              </div>
+                  <Input
+                    placeholder="Postal Code (optional)"
+                    value={postalCode}
+                    onChange={(e) => setPostalCode(e.target.value)}
+                    className="bg-white"
+                  />
+                </div>
 
-              {/* Discount Code */}
-              <div className="mb-6">
-                <Label className="text-foreground text-sm">Discount Code</Label>
-                <div className="flex gap-2 mt-1">
-                  <div className="relative flex-1">
-                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      value={discountCode}
-                      onChange={(e) => setDiscountCode(e.target.value)}
-                      placeholder="Enter code"
-                      className="pl-9 bg-secondary border-border"
-                    />
-                  </div>
-                  <Button
-                    onClick={handleApplyDiscount}
-                    variant="outline"
-                    className="border-border hover:bg-accent"
+                <Input
+                  placeholder="Phone Number"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="bg-white"
+                />
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="saveInfo"
+                    checked={saveInfo}
+                    onCheckedChange={(checked) =>
+                      setSaveInfo(checked as boolean)
+                    }
+                  />
+                  <Label
+                    htmlFor="saveInfo"
+                    className="text-sm text-muted-foreground"
                   >
-                    Apply
-                  </Button>
+                    Save this information for next time
+                  </Label>
                 </div>
               </div>
+            </section>
 
-              {/* Price Breakdown */}
-              <div className="space-y-3 border-t border-border pt-4">
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Subtotal</span>
-                  <span>${subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Shipping</span>
-                  <span>${shippingFee.toFixed(2)}</span>
-                </div>
-                {discount > 0 && (
-                  <div className="flex justify-between text-green-500">
-                    <span>Discount</span>
-                    <span>-${discount.toFixed(2)}</span>
+            {/* Shipping Method Section */}
+            <section className="mb-8">
+              <h2 className="text-xl font-semibold text-foreground mb-4">
+                Shipping Method
+              </h2>
+              <RadioGroup
+                value={shippingMethod}
+                onValueChange={setShippingMethod}
+                className="space-y-3"
+              >
+                <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-white">
+                  <div className="flex items-center space-x-3">
+                    <RadioGroupItem value="cod" id="cod" />
+                    <Label
+                      htmlFor="cod"
+                      className="text-foreground cursor-pointer"
+                    >
+                      Delivery + COD Fee
+                    </Label>
                   </div>
-                )}
-                <div className="border-t border-border pt-3 flex justify-between text-foreground font-bold text-lg">
-                  <span>Total</span>
-                  <span>${total.toFixed(2)}</span>
+                  <span className="font-semibold text-foreground">Rs 250.00</span>
                 </div>
+
+                <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-white">
+                  <div className="flex items-center space-x-3">
+                    <RadioGroupItem value="free" id="free" />
+                    <div>
+                      <Label
+                        htmlFor="free"
+                        className="text-foreground cursor-pointer"
+                      >
+                        Free Delivery | Online Payment
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        5–7 business days
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm text-muted-foreground line-through block">
+                      Rs 250.00
+                    </span>
+                    <span className="font-semibold text-accent">FREE</span>
+                  </div>
+                </div>
+              </RadioGroup>
+            </section>
+
+            {/* Payment Section */}
+            <section className="mb-8">
+              <h2 className="text-xl font-semibold text-foreground mb-4">
+                Payment
+              </h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                All transactions are secure and encrypted.
+              </p>
+              <div className="p-4 border border-border rounded-lg bg-white">
+                <h3 className="font-medium text-foreground mb-2">
+                  Cash on Delivery (COD)
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Cash handling charges Rs 50 apply on all COD orders.
+                </p>
               </div>
-            </div>
+            </section>
+
+            {/* Billing Address Section */}
+            <section className="mb-8">
+              <h2 className="text-xl font-semibold text-foreground mb-4">
+                Billing Address
+              </h2>
+              <RadioGroup
+                value={billingAddress}
+                onValueChange={setBillingAddress}
+                className="space-y-3"
+              >
+                <div className="flex items-center space-x-3 p-4 border border-border rounded-lg bg-white">
+                  <RadioGroupItem value="same" id="same" />
+                  <Label htmlFor="same" className="text-foreground cursor-pointer">
+                    Same as shipping address
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-3 p-4 border border-border rounded-lg bg-white">
+                  <RadioGroupItem value="different" id="different" />
+                  <Label
+                    htmlFor="different"
+                    className="text-foreground cursor-pointer"
+                  >
+                    Use a different billing address
+                  </Label>
+                </div>
+              </RadioGroup>
+            </section>
+
+            {/* Complete Order Button */}
+            <Button
+              onClick={handleCompleteOrder}
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-6 text-lg font-semibold"
+            >
+              Complete Order
+            </Button>
+          </div>
+        </div>
+
+        {/* Right Column - Order Summary */}
+        <div className="lg:w-[400px] lg:fixed lg:right-0 lg:top-16 lg:h-[calc(100vh-4rem)] lg:overflow-y-auto shadow-xl bg-[hsl(30,25%,85%)]">
+          <div className="p-8">
+            <OrderSummary
+              cartItems={cartItems}
+              shippingCost={shippingMethod === "cod" ? 250 : 0}
+            />
           </div>
         </div>
       </div>
-    </MainLayout>
+    </div>
   );
-}
+};
+
+export default Checkout;
