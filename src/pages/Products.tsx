@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Search, Filter, Star, ShoppingCart, Heart } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useCart } from '@/contexts/CartContext';
 
 const allProducts = [
   { id: 1, name: 'Wireless Headphones Pro', price: 299, rating: 4.9, category: 'Electronics', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop' },
@@ -21,6 +23,8 @@ const categories = ['All', 'Electronics', 'Fashion', 'Home & Living'];
 export default function Products() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const { addToCart } = useCart();
+  const navigate = useNavigate();
 
   const filteredProducts = allProducts.filter((product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -28,11 +32,18 @@ export default function Products() {
     return matchesSearch && matchesCategory;
   });
 
-  const handleAddToCart = (productName: string) => {
+  const handleAddToCart = (product: typeof allProducts[0]) => {
+    addToCart({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      image: product.image,
+    });
     toast({
       title: 'Added to Cart',
-      description: `${productName} has been added to your cart.`,
+      description: `${product.name} has been added to your cart.`,
     });
+    navigate('/cart');
   };
 
   return (
@@ -103,14 +114,14 @@ export default function Products() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xl font-bold text-primary">${product.price}</span>
-                  <Button
-                    size="sm"
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                    onClick={() => handleAddToCart(product.name)}
-                  >
-                    <ShoppingCart className="w-4 h-4 mr-1" />
-                    Add
-                  </Button>
+                    <Button
+                      size="sm"
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                      onClick={() => handleAddToCart(product)}
+                    >
+                      <ShoppingCart className="w-4 h-4 mr-1" />
+                      Add
+                    </Button>
                 </div>
               </div>
             </div>
